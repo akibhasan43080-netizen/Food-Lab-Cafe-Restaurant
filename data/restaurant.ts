@@ -1,16 +1,21 @@
 export const restaurant = {
   name: "Food Lab Cafe & Restaurant",
+  nameBn: "ফুড ল্যাব ক্যাফে অ্যান্ড রেস্টুরেন্ট",
   shortName: "Food Lab",
+  shortNameBn: "ফুড ল্যাব",
   tagline: "Good food. Great moments.",
+  taglineBn: "দারুণ খাবার। সেরা মুহূর্ত।",
   address: "Hospital Road, Kulaura 3230, Bangladesh",
+  addressBn: "হসপিটাল রোড, কুলাউড়া ৩২৩০, মৌলভীবাজার, বাংলাদেশ",
   phoneDisplay: "+880 1831-363705",
+  phoneDisplayBn: "+৮৮০ ১৮৩১-৩৬৩৭০৫",
   phoneLink: "+8801831363705",
   facebook: "https://www.facebook.com/cafefoodlab/",
   logoSource: "https://www.facebook.com/photo/?fbid=945910946144942&set=a.457754739709573",
-  // Provisional estimate requested for the demo. Confirm with the restaurant before launch.
   estimatedHours: "11:00 AM – 10:00 PM",
+  estimatedHoursBn: "সকাল ১১:০০ – রাত ১০:০০",
   estimatedHoursNote: "Daily",
-  // Replace with a precise Google Maps pin after owner/location confirmation.
+  estimatedHoursNoteBn: "প্রতিদিন",
   mapsSearch: "https://www.google.com/maps/search/?api=1&query=Food+Lab+Cafe+Restaurant+Hospital+Road+Kulaura+Bangladesh",
   whatsappNumber: "8801831363705"
 } as const;

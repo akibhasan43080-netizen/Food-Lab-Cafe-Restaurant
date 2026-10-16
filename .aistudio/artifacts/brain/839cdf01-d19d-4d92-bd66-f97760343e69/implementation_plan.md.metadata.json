@@ -1,0 +1,6 @@
+{
+  "summary": "Implementation plan for contained, hover-activated menu item scrolling on PC matching the category sidebar height, and a 3-item bounded scroll area on mobile to prevent full-page scroll trapping.",
+  "updatedAt": "2026-10-16T09:15:09.882223915Z",
+  "requestFeedback": true,
+  "userFacing": true
+}
