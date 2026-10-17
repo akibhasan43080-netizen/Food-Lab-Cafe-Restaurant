@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import logoImg from "@/public/foodlab-logo.jpg";
+import { motion, AnimatePresence } from "motion/react";
 import {
   AlertCircle,
   ArrowDownRight,
   ArrowRight,
   BadgeCheck,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -25,6 +27,7 @@ import {
   ShoppingBag,
   Sparkles,
   Star,
+  Trash2,
   X
 } from "lucide-react";
 import { menuCategories, type MenuItem } from "@/data/menu";
@@ -56,7 +59,9 @@ export default function RestaurantSite() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState("pizza");
+  const [activeCategory, setActiveCategory] = useState(
+    menuCategories[0]?.id || "sandwich-shawarma"
+  );
   const [search, setSearch] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [customer, setCustomer] = useState({
@@ -68,28 +73,123 @@ export default function RestaurantSite() {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [toast, setToast] = useState<{
+    type: "add" | "remove";
+    message: string;
+    sub?: string;
+  } | null>(null);
+  const [cartBounced, setCartBounced] = useState(false);
 
   const t = translations[lang];
 
+  const restaurantStatus = useMemo(() => {
+    const now = new Date();
+    const utcHours = now.getUTCHours() + 6;
+    const bdHours = (utcHours + 24) % 24;
+    const bdMinutes = now.getUTCMinutes();
+    const currentDecimal = bdHours + bdMinutes / 60;
+    const isOpen = currentDecimal >= 11 && currentDecimal < 22;
+
+    return {
+      isOpen,
+      label:
+        lang === "bn"
+          ? isOpen
+            ? "এখন খোলা আছে"
+            : "আপাতত বন্ধ"
+          : isOpen
+          ? "Open Now"
+          : "Currently Closed",
+      sub:
+        lang === "bn"
+          ? isOpen
+            ? "রাত ১০:০০ পর্যন্ত"
+            : "সকাল ১১:০০ টায় খুলবে"
+          : isOpen
+          ? "Closes 10:00 PM"
+          : "Opens 11:00 AM"
+    };
+  }, [lang]);
+
   useEffect(() => {
-    setReady(true);
-    try {
-      const savedLang = localStorage.getItem("foodlab-lang");
-      if (savedLang === "en" || savedLang === "bn") {
-        setLang(savedLang);
-        document.documentElement.lang = savedLang;
-      } else {
-        document.documentElement.lang = "bn";
+    if (!toast) return;
+    const duration = toast.type === "remove" ? 2000 : 2600;
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, duration);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  function getItemQuantity(itemId: string, sizeLabel?: string): number {
+    if (sizeLabel) {
+      const key = `${itemId}-${sizeLabel}`;
+      return cart.find(c => c.key === key)?.quantity || 0;
+    }
+    return cart.find(c => c.itemId === itemId && !c.size)?.quantity || 0;
+  }
+
+  useEffect(() => {
+    // Ensure every refresh and first load opens smoothly at the hero section
+    if (typeof window !== "undefined") {
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "manual";
       }
 
-      const savedCart = localStorage.getItem("foodlab-cart");
-      if (savedCart) {
-        setCart(JSON.parse(savedCart) as CartLine[]);
+      // If refreshed with a hash like #gallery, remove hash cleanly so browser does not jump to gallery
+      if (window.location.hash) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
       }
-    } catch {
-      /* Ignore storage parse errors */
+
+      // Ensure instant rock-solid top position on initial load & refreshes
+      window.scrollTo(0, 0);
+
+      const handleBeforeUnload = () => {
+        if (window.location.hash) {
+          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        }
+      };
+      window.addEventListener("beforeunload", handleBeforeUnload);
+
+      setReady(true);
+      try {
+        const savedLang = localStorage.getItem("foodlab-lang");
+        if (savedLang === "en" || savedLang === "bn") {
+          setLang(savedLang);
+          document.documentElement.lang = savedLang;
+        } else {
+          document.documentElement.lang = "bn";
+        }
+
+        const savedCart = localStorage.getItem("foodlab-cart");
+        if (savedCart) {
+          setCart(JSON.parse(savedCart) as CartLine[]);
+        }
+      } catch {
+        /* Ignore storage parse errors */
+      }
+
+      return () => {
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+      };
+    } else {
+      setReady(true);
     }
   }, []);
+
+  function scrollToSection(id: string) {
+    setMobileMenu(false);
+    if (typeof document === "undefined") return;
+    const elem = document.getElementById(id);
+    if (elem) {
+      const headerOffset = 80;
+      const elementPosition = elem.getBoundingClientRect().top + window.scrollY;
+      const offsetPosition = elementPosition - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
+    }
+  }
 
   useEffect(() => {
     if (ready) {
@@ -258,17 +358,63 @@ export default function RestaurantSite() {
         }
       ];
     });
-    setCartOpen(true);
+
+    setToast({
+      type: "add",
+      message:
+        lang === "bn"
+          ? `${item.nameBn} কার্টে যোগ হয়েছে`
+          : `Added ${item.name} to cart`,
+      sub: size
+        ? lang === "bn"
+          ? `সাইজ: ${chosenSizeBn}`
+          : `Size: ${chosenSize}`
+        : undefined
+    });
+
+    setCartBounced(true);
+    setTimeout(() => setCartBounced(false), 500);
   }
 
   function updateQuantity(key: string, delta: number) {
-    setCart(previous =>
-      previous
+    let removedName = "";
+    let willFullyRemove = false;
+
+    setCart(previous => {
+      const target = previous.find(line => line.key === key);
+      if (target) {
+        removedName = lang === "bn" ? target.nameBn : target.name;
+        if (target.quantity + delta <= 0) {
+          willFullyRemove = true;
+        }
+      }
+      return previous
         .map(line =>
           line.key === key ? { ...line, quantity: line.quantity + delta } : line
         )
-        .filter(line => line.quantity > 0)
-    );
+        .filter(line => line.quantity > 0);
+    });
+
+    if (delta < 0 && removedName) {
+      setToast({
+        type: "remove",
+        message: willFullyRemove
+          ? lang === "bn"
+            ? `${removedName} কার্ট থেকে সরানো হয়েছে`
+            : `${removedName} removed from cart`
+          : lang === "bn"
+          ? `${removedName} সংখ্যা কমানো হয়েছে`
+          : `Decreased ${removedName}`,
+        sub: willFullyRemove
+          ? lang === "bn"
+            ? "ভুলবশত সরানো হলে কার্ট চেক করুন"
+            : "Check your cart if removed accidentally"
+          : undefined
+      });
+    }
+
+    setCartBounced(true);
+    setTimeout(() => setCartBounced(false), 500);
   }
 
   function handleCheckoutSubmit(event: React.FormEvent) {
@@ -365,7 +511,15 @@ export default function RestaurantSite() {
     <main className={lang === "bn" ? "lang-bn" : "lang-en"}>
       {/* Site Header */}
       <header className="site-header">
-        <a className="brand" href="#home" aria-label="Food Lab home">
+        <a
+          className="brand"
+          href="#home"
+          aria-label="Food Lab home"
+          onClick={(e) => {
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
           <span className="brand-logo-wrap">
             <Image
               src={logoImg}
@@ -390,19 +544,49 @@ export default function RestaurantSite() {
           className={`main-nav ${mobileMenu ? "is-open" : ""}`}
           aria-label="Main navigation"
         >
-          <a href="#menu" onClick={() => setMobileMenu(false)}>
+          <a
+            href="#menu"
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToSection("menu");
+            }}
+          >
             {t.nav.menu}
           </a>
-          <a href="#reviews" onClick={() => setMobileMenu(false)}>
+          <a
+            href="#reviews"
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToSection("reviews");
+            }}
+          >
             {t.nav.reviews}
           </a>
-          <a href="#story" onClick={() => setMobileMenu(false)}>
+          <a
+            href="#story"
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToSection("story");
+            }}
+          >
             {t.nav.story}
           </a>
-          <a href="#gallery" onClick={() => setMobileMenu(false)}>
+          <a
+            href="#gallery"
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToSection("gallery");
+            }}
+          >
             {t.nav.gallery}
           </a>
-          <a href="#visit" onClick={() => setMobileMenu(false)}>
+          <a
+            href="#visit"
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToSection("visit");
+            }}
+          >
             {t.nav.visit}
           </a>
 
@@ -457,6 +641,26 @@ export default function RestaurantSite() {
             </button>
           </div>
 
+          <button
+            type="button"
+            className={`header-cart-btn ${itemCount > 0 ? "has-items" : ""}`}
+            onClick={() => setCartOpen(true)}
+            aria-label={lang === "bn" ? `কার্ট দেখুন (${itemCount}টি পদ)` : `View Cart (${itemCount} items)`}
+          >
+            <div className="header-cart-icon-box">
+              <ShoppingBag size={17} />
+              {itemCount > 0 && (
+                <span className={`header-cart-badge ${cartBounced ? "animate-pulse" : ""}`}>
+                  {numDisplay(itemCount)}
+                </span>
+              )}
+            </div>
+            <span className="header-cart-label">{lang === "bn" ? "কার্ট" : "Cart"}</span>
+            {itemCount > 0 && (
+              <span className="header-cart-total">{formatPrice(subtotal, lang)}</span>
+            )}
+          </button>
+
           <a
             className="header-call"
             href={`tel:${restaurant.phoneLink}`}
@@ -469,7 +673,7 @@ export default function RestaurantSite() {
           <button
             className="button button-dark header-order"
             onClick={() => {
-              setActiveCategory("pizza");
+              setActiveCategory(menuCategories[0]?.id || "sandwich-shawarma");
               document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" });
             }}
           >
@@ -489,41 +693,56 @@ export default function RestaurantSite() {
       {/* Hero Section */}
       <section className="hero" id="home">
         <div className="hero-copy">
-          <a
-            href="#reviews"
-            className="hero-rating-badge"
-            aria-label={`${numDisplay("4.2")} star rating from ${numDisplay(447)} Google reviews`}
-          >
-            <span className="hero-badge-g">
-              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
-                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-              </svg>
-            </span>
-            <span className="hero-badge-score">
-              <Star size={12} className="inline mr-1" fill="#f59e0b" stroke="#f59e0b" />
-              <strong>{numDisplay("4.2")}</strong>
-            </span>
-            <span className="hero-badge-sep">•</span>
-            <span className="hero-badge-reviews">
-              {numDisplay(447)} {lang === "bn" ? "গুগল রিভিউ" : "Google reviews"}
-            </span>
-            <ChevronRight size={13} className="hero-badge-chevron" />
-          </a>
+          <div className="hero-top-badges">
+            <a
+              href="#reviews"
+              className="hero-rating-badge"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToSection("reviews");
+              }}
+              aria-label={`${numDisplay("4.2")} star rating from ${numDisplay(447)} Google reviews`}
+            >
+              <span className="hero-badge-g">
+                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                </svg>
+              </span>
+              <span className="hero-badge-score">
+                <Star size={12} className="inline mr-1" fill="#f59e0b" stroke="#f59e0b" />
+                <strong>{numDisplay("4.2")}</strong>
+              </span>
+              <span className="hero-badge-sep">•</span>
+              <span className="hero-badge-reviews">
+                {numDisplay(447)} {lang === "bn" ? "গুগল রিভিউ" : "Google reviews"}
+              </span>
+              <ChevronRight size={13} className="hero-badge-chevron" />
+            </a>
+          </div>
 
           <p className="eyebrow">
-            <span /> {t.hero.eyebrow}
+            <span className="animate-pulse" /> {t.hero.eyebrow}
           </p>
+
           <h1>
-            {t.hero.titleLine1}
-            <br />
-            <em>{t.hero.titleLine2}</em>
+            <span className="block">{t.hero.titleLine1}</span>
+            <em className="block text-[var(--orange)]">{t.hero.titleLine2}</em>
           </h1>
+
           <p className="hero-description">{t.hero.description}</p>
+
           <div className="hero-actions">
-            <a href="#menu" className="button button-orange">
+            <a
+              href="#menu"
+              className="button button-orange"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToSection("menu");
+              }}
+            >
               {t.actions.exploreMenu} <ArrowDownRight size={17} />
             </a>
             <a
@@ -532,24 +751,57 @@ export default function RestaurantSite() {
             >
               <Phone size={16} /> {t.actions.callToOrder}
             </a>
-            <a href="#reviews" className="button button-reviews-link">
+            <a
+              href="#reviews"
+              className="button button-reviews-link"
+              onClick={(e) => {
+                e.preventDefault();
+                scrollToSection("reviews");
+              }}
+            >
               <Star size={15} fill="#f59e0b" stroke="#f59e0b" />
               <span>{lang === "bn" ? "রিভিউ দেখুন" : "Reviews"}</span>
             </a>
           </div>
+
+          {/* Hero Proof: 3 balanced, harmonious trust & status items */}
           <div className="hero-proof">
-            <span className="proof-icon">
-              <MapPin size={16} />
-            </span>
-            <span>
-              <strong>{t.hero.proof1Title}</strong>
-              <small>{t.hero.proof1Subtitle}</small>
-            </span>
+            <div className="proof-item">
+              <span className="proof-icon">
+                <MapPin size={16} />
+              </span>
+              <div className="proof-text-col">
+                <strong>{t.hero.proof1Title}</strong>
+                <small>{t.hero.proof1Subtitle}</small>
+              </div>
+            </div>
+
             <span className="proof-divider" />
-            <span>
-              <strong>{t.hero.proof2Title}</strong>
-              <small>{t.hero.proof2Subtitle}</small>
-            </span>
+
+            <div className="proof-item">
+              <span className="proof-icon">
+                <Sparkles size={16} />
+              </span>
+              <div className="proof-text-col">
+                <strong>{t.hero.proof2Title}</strong>
+                <small>{t.hero.proof2Subtitle}</small>
+              </div>
+            </div>
+
+            <span className="proof-divider" />
+
+            <div className="proof-item">
+              <span className="proof-icon">
+                <Clock3 size={16} />
+              </span>
+              <div className="proof-text-col">
+                <div className="proof-status-row">
+                  <span className={`status-dot ${restaurantStatus.isOpen ? "open" : "closed"}`} />
+                  <strong>{restaurantStatus.label}</strong>
+                </div>
+                <small>{restaurantStatus.sub} (১১:০০ AM – ১০:০০ PM)</small>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -559,6 +811,8 @@ export default function RestaurantSite() {
               src="https://i.pinimg.com/736x/3c/3a/00/3c3a009405493f677ca648ef2c326dac.jpg"
               alt={lang === "bn" ? "সিগনেচার পিৎজা" : "Signature pizza"}
               fill
+              priority
+              sizes="(max-width: 900px) 100vw, 490px"
               className="object-cover"
               referrerPolicy="no-referrer"
             />
@@ -593,7 +847,13 @@ export default function RestaurantSite() {
 
       {/* Featured Items */}
       <section className="featured-section section-pad">
-        <div className="section-heading">
+        <motion.div
+          className="section-heading"
+          initial={{ opacity: 0, y: 22 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+        >
           <div>
             <p className="eyebrow">
               <span /> {t.featured.eyebrow}
@@ -605,7 +865,7 @@ export default function RestaurantSite() {
             </h2>
           </div>
           <p className="section-description">{t.featured.description}</p>
-        </div>
+        </motion.div>
 
         <div className="featured-grid">
           {t.featured.items.map((item, index) => (
@@ -669,7 +929,13 @@ export default function RestaurantSite() {
           </p>
         </div>
 
-        <div className="section-heading menu-heading">
+        <motion.div
+          className="section-heading menu-heading"
+          initial={{ opacity: 0, y: 22 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+        >
           <div>
             <h2>
               {t.menu.title}
@@ -698,7 +964,7 @@ export default function RestaurantSite() {
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         <div className="menu-layout">
           {/* Categories Sidebar */}
@@ -714,7 +980,10 @@ export default function RestaurantSite() {
                 onClick={() => handleCategorySelect(category.id)}
               >
                 <span>{numDisplay(String(index + 1).padStart(2, "0"))}</span>
-                <span>{lang === "bn" ? category.nameBn : category.name}</span>
+                <span className="cat-name-wrap">
+                  <span>{lang === "bn" ? category.nameBn : category.name}</span>
+                  <span className="cat-badge">{numDisplay(category.items.length)}</span>
+                </span>
                 <ArrowRight size={15} />
               </button>
             ))}
@@ -773,16 +1042,24 @@ export default function RestaurantSite() {
                                     lang === "bn" && size.labelBn
                                       ? size.labelBn
                                       : size.label;
+                                  const sizeQty = getItemQuantity(item.id, size.label);
                                   return (
                                     <button
                                       key={size.label}
+                                      className={`size-pill-btn ${sizeQty > 0 ? "has-qty" : ""}`}
                                       onClick={() => addItem(item, size)}
                                     >
                                       <span>{sizeLabel}</span>
                                       <strong>
                                         {formatPrice(size.price, lang)}
                                       </strong>
-                                      <Plus size={12} />
+                                      {sizeQty > 0 ? (
+                                        <span className="size-pill-qty">
+                                          {numDisplay(sizeQty)}
+                                        </span>
+                                      ) : (
+                                        <Plus size={12} />
+                                      )}
                                     </button>
                                   );
                                 })}
@@ -797,14 +1074,40 @@ export default function RestaurantSite() {
                                 : formatPrice(item.price, lang)}
                             </strong>
                             {!item.sizes && (
-                              <button
-                                className="add-button"
-                                disabled={item.price === 0}
-                                onClick={() => addItem(item)}
-                                aria-label={`Add ${itemName} to cart`}
-                              >
-                                <Plus size={15} /> {t.actions.addToCart}
-                              </button>
+                              (() => {
+                                const qty = getItemQuantity(item.id);
+                                if (qty > 0) {
+                                  return (
+                                    <div className="menu-item-stepper">
+                                      <button
+                                        type="button"
+                                        onClick={() => updateQuantity(item.id, -1)}
+                                        aria-label="Decrease quantity"
+                                      >
+                                        <Minus size={13} />
+                                      </button>
+                                      <span>{numDisplay(qty)}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateQuantity(item.id, 1)}
+                                        aria-label="Increase quantity"
+                                      >
+                                        <Plus size={13} />
+                                      </button>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <button
+                                    className="add-button"
+                                    disabled={item.price === 0}
+                                    onClick={() => addItem(item)}
+                                    aria-label={`Add ${itemName} to cart`}
+                                  >
+                                    <Plus size={15} /> {t.actions.addToCart}
+                                  </button>
+                                );
+                              })()
                             )}
                           </div>
                         </article>
@@ -834,7 +1137,13 @@ export default function RestaurantSite() {
       {/* Google Ratings & Reviews Social Proof Section */}
       <section className="reviews-section section-pad" id="reviews">
         <div className="reviews-header-wrap">
-          <div className="reviews-header-left">
+          <motion.div
+            className="reviews-header-left"
+            initial={{ opacity: 0, y: 22 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+          >
             <p className="eyebrow">
               <span /> {t.reviews.eyebrow}
             </p>
@@ -844,7 +1153,7 @@ export default function RestaurantSite() {
               <em>{t.reviews.titleEm}</em>
             </h2>
             <p className="section-description">{t.reviews.description}</p>
-          </div>
+          </motion.div>
 
           <div className="reviews-summary-card">
             <div className="google-badge-top">
@@ -1078,7 +1387,13 @@ export default function RestaurantSite() {
 
       {/* Experience Section */}
       <section className="experience-section section-pad" id="gallery">
-        <div className="experience-copy">
+        <motion.div
+          className="experience-copy"
+          initial={{ opacity: 0, y: 22 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+        >
           <p className="eyebrow">
             <span /> {t.experience.eyebrow}
           </p>
@@ -1097,7 +1412,7 @@ export default function RestaurantSite() {
             <Facebook size={16} /> {t.actions.findFacebook}{" "}
             <ArrowRight size={15} />
           </a>
-        </div>
+        </motion.div>
         <div className="experience-visual">
           <div className="experience-image experience-image-tall" style={{ position: "relative", overflow: "hidden" }}>
             <Image
@@ -1126,7 +1441,13 @@ export default function RestaurantSite() {
 
       {/* Visit Section */}
       <section className="visit-section section-pad" id="visit">
-        <div className="visit-heading">
+        <motion.div
+          className="visit-heading"
+          initial={{ opacity: 0, y: 22 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+        >
           <p className="eyebrow">
             <span /> {t.visit.eyebrow}
           </p>
@@ -1136,7 +1457,7 @@ export default function RestaurantSite() {
             <em>{t.visit.titleEm}</em>
           </h2>
           <p>{t.visit.description}</p>
-        </div>
+        </motion.div>
 
         <div className="visit-card">
           <div className="visit-detail">
@@ -1218,7 +1539,7 @@ export default function RestaurantSite() {
           <button
             className="button button-orange"
             onClick={() => {
-              setActiveCategory("pizza");
+              setActiveCategory(menuCategories[0]?.id || "sandwich-shawarma");
               document
                 .getElementById("menu")
                 ?.scrollIntoView({ behavior: "smooth" });
@@ -1269,291 +1590,420 @@ export default function RestaurantSite() {
         </small>
       </footer>
 
+      {/* Floating Cart Feature / Circle on PC & Tablet */}
+      <motion.button
+        type="button"
+        className={`floating-pc-cart ${itemCount > 0 ? "has-items" : ""}`}
+        onClick={() => setCartOpen(true)}
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        aria-label={
+          lang === "bn"
+            ? `কার্ট খুলুন (${itemCount}টি পদ)`
+            : `Open Cart (${itemCount} items)`
+        }
+      >
+        <div className="floating-cart-icon">
+          <ShoppingBag size={20} />
+          {itemCount > 0 && (
+            <span
+              className={`floating-cart-count ${
+                cartBounced ? "animate-bounce" : ""
+              }`}
+            >
+              {numDisplay(itemCount)}
+            </span>
+          )}
+        </div>
+        <div className="floating-cart-text">
+          <span className="floating-cart-title">
+            {lang === "bn" ? "আপনার কার্ট" : "Your Cart"}
+          </span>
+          <span
+            className={`floating-cart-sub ${itemCount === 0 ? "empty" : ""}`}
+          >
+            {itemCount > 0
+              ? formatPrice(subtotal, lang)
+              : lang === "bn"
+              ? "পদ নির্বাচন করুন"
+              : "0 items"}
+          </span>
+        </div>
+      </motion.button>
+
       {/* Mobile Sticky Order Bar */}
       <div className="mobile-order-bar">
         <a href={`tel:${restaurant.phoneLink}`} aria-label="Call Food Lab">
-          <Phone size={16} /> {t.mobileBar.call}
+          <Phone size={15} /> <span>{t.mobileBar.call}</span>
         </a>
         <button
           onClick={() => {
-            setActiveCategory("pizza");
+            setActiveCategory(menuCategories[0]?.id || "sandwich-shawarma");
             document
               .getElementById("menu")
               ?.scrollIntoView({ behavior: "smooth" });
           }}
         >
-          {t.mobileBar.menu} <ArrowRight size={15} />
+          {t.mobileBar.menu} <ArrowRight size={14} />
         </button>
         <button
-          className="mobile-cart-button"
+          className={`mobile-cart-button ${itemCount > 0 ? "has-items" : ""}`}
           onClick={() => setCartOpen(true)}
           aria-label={`Open cart, ${itemCount} items`}
         >
-          <ShoppingBag size={17} />
-          <span>{numDisplay(itemCount)}</span>
+          <ShoppingBag size={16} />
+          {itemCount > 0 ? (
+            <>
+              <span className={`cart-badge-bounce ${cartBounced ? "animate-pulse" : ""}`}>
+                {numDisplay(itemCount)}
+              </span>
+              <span className="mobile-bar-subtotal">
+                {formatPrice(subtotal, lang)}
+              </span>
+            </>
+          ) : (
+            <span>{t.mobileBar.cart}</span>
+          )}
         </button>
       </div>
 
       {/* Cart Drawer */}
-      {cartOpen && (
-        <div
-          className="overlay"
-          role="presentation"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) setCartOpen(false);
-          }}
-        >
-          <section
-            className="cart-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cart-title"
+      <AnimatePresence>
+        {cartOpen && (
+          <motion.div
+            className="overlay"
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onMouseDown={event => {
+              if (event.target === event.currentTarget) setCartOpen(false);
+            }}
           >
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">
-                  <span /> {t.cart.eyebrow}
-                </p>
-                <h2 id="cart-title">
-                  {t.cart.title}{" "}
-                  <span>({numDisplay(itemCount)})</span>
-                </h2>
-              </div>
-              <button
-                className="icon-button"
-                aria-label="Close cart"
-                onClick={() => setCartOpen(false)}
-              >
-                <X />
-              </button>
-            </div>
-
-            {cart.length === 0 ? (
-              <div className="cart-empty">
-                <ShoppingBag size={34} />
-                <h3>{t.cart.emptyTitle}</h3>
-                <p>{t.cart.emptyDesc}</p>
+            <motion.section
+              className="cart-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cart-title"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 260 }}
+            >
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">
+                    <span /> {t.cart.eyebrow}
+                  </p>
+                  <h2 id="cart-title">
+                    {t.cart.title}{" "}
+                    <span>({numDisplay(itemCount)})</span>
+                  </h2>
+                </div>
                 <button
-                  className="button button-orange"
-                  onClick={() => {
-                    setCartOpen(false);
-                    document
-                      .getElementById("menu")
-                      ?.scrollIntoView({ behavior: "smooth" });
-                  }}
+                  className="icon-button"
+                  aria-label="Close cart"
+                  onClick={() => setCartOpen(false)}
                 >
-                  {t.actions.browseDishes} <ArrowRight size={16} />
+                  <X />
                 </button>
               </div>
-            ) : (
-              <>
-                <div className="cart-lines">
-                  {cart.map(line => {
-                    const lineName = lang === "bn" ? line.nameBn : line.name;
-                    const sizeLabel =
-                      line.size
-                        ? `${
-                            lang === "bn" && line.sizeBn ? line.sizeBn : line.size
-                          } · `
-                        : "";
 
-                    return (
-                      <div className="cart-line" key={line.key}>
-                        <div className="cart-line-copy">
-                          <strong>{lineName}</strong>
-                          <small>
-                            {sizeLabel}
-                            {formatPrice(line.price, lang)} {t.cart.each}
-                          </small>
-                          <div className="quantity-control">
-                            <button
-                              aria-label={`Remove one ${lineName}`}
-                              onClick={() => updateQuantity(line.key, -1)}
-                            >
-                              <Minus size={13} />
-                            </button>
-                            <span>{numDisplay(line.quantity)}</span>
-                            <button
-                              aria-label={`Add one ${lineName}`}
-                              onClick={() => updateQuantity(line.key, 1)}
-                            >
-                              <Plus size={13} />
-                            </button>
-                          </div>
-                        </div>
-                        <strong>
-                          {formatPrice(line.price * line.quantity, lang)}
-                        </strong>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="cart-summary">
-                  <div>
-                    <span>{t.cart.subtotal}</span>
-                    <strong>{formatPrice(subtotal, lang)}</strong>
-                  </div>
-                  <p>{t.cart.deliveryNote}</p>
+              {cart.length === 0 ? (
+                <div className="cart-empty">
+                  <ShoppingBag size={34} />
+                  <h3>{t.cart.emptyTitle}</h3>
+                  <p>{t.cart.emptyDesc}</p>
                   <button
-                    className="button button-orange full-width"
+                    className="button button-orange"
                     onClick={() => {
                       setCartOpen(false);
-                      setCheckoutOpen(true);
+                      document
+                        .getElementById("menu")
+                        ?.scrollIntoView({ behavior: "smooth" });
                     }}
                   >
-                    {t.actions.continueCheckout} <ArrowRight size={16} />
+                    {t.actions.browseDishes} <ArrowRight size={16} />
                   </button>
                 </div>
-              </>
-            )}
-          </section>
-        </div>
-      )}
+              ) : (
+                <>
+                  <div className="cart-lines">
+                    {cart.map(line => {
+                      const lineName = lang === "bn" ? line.nameBn : line.name;
+                      const sizeLabel =
+                        line.size
+                          ? `${
+                              lang === "bn" && line.sizeBn ? line.sizeBn : line.size
+                            } · `
+                          : "";
+
+                      return (
+                        <div className="cart-line" key={line.key}>
+                          <div className="cart-line-copy">
+                            <strong>{lineName}</strong>
+                            <small>
+                              {sizeLabel}
+                              {formatPrice(line.price, lang)} {t.cart.each}
+                            </small>
+                            <div className="quantity-control">
+                              <button
+                                aria-label={`Remove one ${lineName}`}
+                                onClick={() => updateQuantity(line.key, -1)}
+                              >
+                                <Minus size={13} />
+                              </button>
+                              <span>{numDisplay(line.quantity)}</span>
+                              <button
+                                aria-label={`Add one ${lineName}`}
+                                onClick={() => updateQuantity(line.key, 1)}
+                              >
+                                <Plus size={13} />
+                              </button>
+                            </div>
+                          </div>
+                          <strong>
+                            {formatPrice(line.price * line.quantity, lang)}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="cart-summary">
+                    <div>
+                      <span>{t.cart.subtotal}</span>
+                      <strong>{formatPrice(subtotal, lang)}</strong>
+                    </div>
+                    <p>{t.cart.deliveryNote}</p>
+                    <button
+                      className="button button-orange full-width"
+                      onClick={() => {
+                        setCartOpen(false);
+                        setCheckoutOpen(true);
+                      }}
+                    >
+                      {t.actions.continueCheckout} <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Checkout Drawer */}
-      {checkoutOpen && (
-        <div
-          className="overlay"
-          role="presentation"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) setCheckoutOpen(false);
-          }}
-        >
-          <section
-            className="checkout-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="checkout-title"
+      <AnimatePresence>
+        {checkoutOpen && (
+          <motion.div
+            className="overlay"
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onMouseDown={event => {
+              if (event.target === event.currentTarget) setCheckoutOpen(false);
+            }}
           >
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">
-                  <span /> {t.checkout.eyebrow}
-                </p>
-                <h2 id="checkout-title">{t.checkout.title}</h2>
+            <motion.section
+              className="checkout-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="checkout-title"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 260 }}
+            >
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">
+                    <span /> {t.checkout.eyebrow}
+                  </p>
+                  <h2 id="checkout-title">{t.checkout.title}</h2>
+                </div>
+                <button
+                  className="icon-button"
+                  aria-label="Close checkout"
+                  onClick={() => setCheckoutOpen(false)}
+                >
+                  <X />
+                </button>
               </div>
-              <button
-                className="icon-button"
-                aria-label="Close checkout"
-                onClick={() => setCheckoutOpen(false)}
-              >
-                <X />
-              </button>
-            </div>
 
-            <p className="checkout-intro">{t.checkout.intro}</p>
+              <p className="checkout-intro">{t.checkout.intro}</p>
 
-            {formError && (
-              <div className="checkout-error-banner" role="alert">
-                <AlertCircle size={16} className="flex-shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCheckoutSubmit}>
-              <label>
-                {t.checkout.nameLabel}
-                <input
-                  required
-                  value={customer.name}
-                  onChange={event => {
-                    setCustomer({ ...customer, name: event.target.value });
-                    if (formError) setFormError(null);
-                  }}
-                  placeholder={t.checkout.namePlaceholder}
-                />
-              </label>
-
-              <label>
-                {t.checkout.phoneLabel}
-                <input
-                  required
-                  type="tel"
-                  value={customer.phone}
-                  onChange={event => {
-                    setCustomer({ ...customer, phone: event.target.value });
-                    if (formError) setFormError(null);
-                  }}
-                  placeholder={t.checkout.phonePlaceholder}
-                />
-              </label>
-
-              <label>
-                {t.checkout.orderTypeLabel}
-                <span className="select-wrap">
-                  <select
-                    value={customer.orderType}
-                    onChange={event =>
-                      setCustomer({
-                        ...customer,
-                        orderType: event.target.value,
-                        address:
-                          event.target.value === "Pickup" ? "" : customer.address
-                      })
-                    }
-                  >
-                    <option value="Pickup">{t.checkout.pickupOption}</option>
-                    <option value="Delivery">{t.checkout.deliveryOption}</option>
-                  </select>
-                  <ChevronDown size={16} />
-                </span>
-              </label>
-
-              {customer.orderType === "Delivery" && (
-                <label>
-                  {t.checkout.addressLabel}
-                  <input
-                    required
-                    value={customer.address}
-                    onChange={event => {
-                      setCustomer({ ...customer, address: event.target.value });
-                      if (formError) setFormError(null);
-                    }}
-                    placeholder={t.checkout.addressPlaceholder}
-                  />
-                </label>
+              {formError && (
+                <div className="checkout-error-banner" role="alert">
+                  <AlertCircle size={16} className="flex-shrink-0" />
+                  <span>{formError}</span>
+                </div>
               )}
 
-              <label>
-                {t.checkout.notesLabel}
-                <textarea
-                  value={customer.note}
-                  onChange={event =>
-                    setCustomer({ ...customer, note: event.target.value })
-                  }
-                  placeholder={t.checkout.notesPlaceholder}
-                  rows={3}
-                />
-              </label>
+              <form onSubmit={handleCheckoutSubmit}>
+                <label>
+                  {t.checkout.nameLabel}
+                  <input
+                    required
+                    value={customer.name}
+                    onChange={event => {
+                      setCustomer({ ...customer, name: event.target.value });
+                      if (formError) setFormError(null);
+                    }}
+                    placeholder={t.checkout.namePlaceholder}
+                  />
+                </label>
 
-              <div className="checkout-total">
-                <span>{t.checkout.orderSubtotal}</span>
-                <strong>{formatPrice(subtotal, lang)}</strong>
+                <label>
+                  {t.checkout.phoneLabel}
+                  <input
+                    required
+                    type="tel"
+                    value={customer.phone}
+                    onChange={event => {
+                      setCustomer({ ...customer, phone: event.target.value });
+                      if (formError) setFormError(null);
+                    }}
+                    placeholder={t.checkout.phonePlaceholder}
+                  />
+                </label>
+
+                <label>
+                  {t.checkout.orderTypeLabel}
+                  <span className="select-wrap">
+                    <select
+                      value={customer.orderType}
+                      onChange={event =>
+                        setCustomer({
+                          ...customer,
+                          orderType: event.target.value,
+                          address:
+                            event.target.value === "Pickup" ? "" : customer.address
+                        })
+                      }
+                    >
+                      <option value="Pickup">{t.checkout.pickupOption}</option>
+                      <option value="Delivery">{t.checkout.deliveryOption}</option>
+                    </select>
+                    <ChevronDown size={16} />
+                  </span>
+                </label>
+
+                {customer.orderType === "Delivery" && (
+                  <label>
+                    {t.checkout.addressLabel}
+                    <input
+                      required
+                      value={customer.address}
+                      onChange={event => {
+                        setCustomer({ ...customer, address: event.target.value });
+                        if (formError) setFormError(null);
+                      }}
+                      placeholder={t.checkout.addressPlaceholder}
+                    />
+                  </label>
+                )}
+
+                <label>
+                  {t.checkout.notesLabel}
+                  <textarea
+                    value={customer.note}
+                    onChange={event =>
+                      setCustomer({ ...customer, note: event.target.value })
+                    }
+                    placeholder={t.checkout.notesPlaceholder}
+                    rows={3}
+                  />
+                </label>
+
+                <div className="checkout-total">
+                  <span>{t.checkout.orderSubtotal}</span>
+                  <strong>{formatPrice(subtotal, lang)}</strong>
+                </div>
+
+                <p className="checkout-disclaimer">{t.checkout.disclaimer}</p>
+
+                <button
+                  type="submit"
+                  className="button button-orange full-width"
+                >
+                  {t.actions.continueWhatsApp} <ArrowRight size={16} />
+                </button>
+
+                <a
+                  className="checkout-call"
+                  href={`tel:${restaurant.phoneLink}`}
+                >
+                  <Phone size={15} /> {t.actions.preferCall}:{" "}
+                  {lang === "bn"
+                    ? restaurant.phoneDisplayBn
+                    : restaurant.phoneDisplay}
+                </a>
+              </form>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Animated Cart Toast (Add / Live Red Remove Confirmation) */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            className={`cart-toast ${toast.type === "remove" ? "is-remove" : "is-add"}`}
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            <div className="cart-toast-inner">
+              {toast.type === "remove" ? (
+                <div className="toast-badge-remove" aria-label="Removed from cart">
+                  <span className="toast-pulse-red" />
+                  <Trash2 size={16} />
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 grid place-items-center flex-shrink-0">
+                  <Check size={16} />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {toast.type === "remove" && (
+                    <span className="toast-badge-tag-red">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                      {lang === "bn" ? "সরানো হয়েছে" : "Removed"}
+                    </span>
+                  )}
+                  <strong className="block text-sm leading-tight truncate font-semibold text-white">
+                    {toast.message}
+                  </strong>
+                </div>
+                {toast.sub && (
+                  <small className="text-xs text-stone-300 block mt-0.5">
+                    {toast.sub}
+                  </small>
+                )}
               </div>
-
-              <p className="checkout-disclaimer">{t.checkout.disclaimer}</p>
-
               <button
-                type="submit"
-                className="button button-orange full-width"
+                type="button"
+                className="toast-view-cart-btn"
+                onClick={() => {
+                  setToast(null);
+                  setCartOpen(true);
+                }}
               >
-                {t.actions.continueWhatsApp} <ArrowRight size={16} />
+                <ShoppingBag size={14} className="inline mr-1" />
+                {lang === "bn" ? "কার্ট দেখুন" : "View Cart"}
               </button>
-
-              <a
-                className="checkout-call"
-                href={`tel:${restaurant.phoneLink}`}
-              >
-                <Phone size={15} /> {t.actions.preferCall}:{" "}
-                {lang === "bn"
-                  ? restaurant.phoneDisplayBn
-                  : restaurant.phoneDisplay}
-              </a>
-            </form>
-          </section>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

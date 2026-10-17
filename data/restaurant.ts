@@ -5,8 +5,8 @@ export const restaurant = {
   shortNameBn: "ফুড ল্যাব",
   tagline: "Good food. Great moments.",
   taglineBn: "দারুণ খাবার। সেরা মুহূর্ত।",
-  address: "Hospital Road, Kulaura 3230, Bangladesh",
-  addressBn: "হসপিটাল রোড, কুলাউড়া ৩২৩০, মৌলভীবাজার, বাংলাদেশ",
+  address: "Shishir Market (1st floor), Station Chowmuhoni, Kulaura",
+  addressBn: "শিশির মার্কেট (১ম তলা), স্টেশন চৌমুহনী, কুলাউড়া",
   phoneDisplay: "+880 1831-363705",
   phoneDisplayBn: "+৮৮০ ১৮৩১-৩৬৩৭০৫",
   phoneLink: "+8801831363705",
@@ -16,6 +16,6 @@ export const restaurant = {
   estimatedHoursBn: "সকাল ১১:০০ – রাত ১০:০০",
   estimatedHoursNote: "Daily",
   estimatedHoursNoteBn: "প্রতিদিন",
-  mapsSearch: "https://www.google.com/maps/search/?api=1&query=Food+Lab+Cafe+Restaurant+Hospital+Road+Kulaura+Bangladesh",
+  mapsSearch: "https://www.google.com/maps/search/?api=1&query=Food+Lab+Cafe+Restaurant+Shishir+Market+Station+Chowmuhoni+Kulaura",
   whatsappNumber: "8801831363705"
 } as const;
