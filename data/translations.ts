@@ -95,10 +95,10 @@ export const translations = {
       tag: "মেন্যু স্পেশাল",
       items: [
         {
-          id: "tandoori-chicken-pizza",
-          title: "তান্দুরি চিকেন পিৎজা",
-          titleEn: "Tandoori Chicken Pizza",
-          note: "স্মোকি তান্দুরি মশলা ও গলিত চিজের সেরা মেলবন্ধন",
+          id: "chicken-supreme-pizza",
+          title: "চিকেন সুপ্রিম পিৎজা",
+          titleEn: "Chicken Supreme Pizza",
+          note: "স্মোকি চিকেন ও গলিত চিজে সাজানো গ্রাহকপ্রিয় পিৎজা",
           price: 550,
           category: "pizza",
           seed: "pizza"
@@ -108,7 +108,7 @@ export const translations = {
           title: "শেফ স্পেশাল বার্গার",
           titleEn: "Chef Special Burger",
           note: "জুসি চিকেন প্যাটি ও সিক্রেট সসে সাজানো স্পেশাল বার্গার",
-          price: 320,
+          price: 340,
           category: "burgers",
           seed: "burger"
         },
@@ -117,8 +117,8 @@ export const translations = {
           title: "ফুড ল্যাব স্পেশাল চাউমিন",
           titleEn: "Food Lab Special Chow Mein",
           note: "চিকেন ও তাজা সবজির মিশ্রণে মুখরোচক চাউমিন",
-          price: 350,
-          category: "chow-mein",
+          price: 380,
+          category: "pasta-chowmein",
           seed: "noodles"
         }
       ]
@@ -284,10 +284,10 @@ export const translations = {
       tag: "MENU FAVOURITE",
       items: [
         {
-          id: "tandoori-chicken-pizza",
-          title: "Tandoori Chicken Pizza",
-          titleEn: "Tandoori Chicken Pizza",
-          note: "Smoky, savoury, made for sharing",
+          id: "chicken-supreme-pizza",
+          title: "Chicken Supreme Pizza",
+          titleEn: "Chicken Supreme Pizza",
+          note: "Smoky chicken and melted cheese, made for sharing",
           price: 550,
           category: "pizza",
           seed: "pizza"
@@ -296,8 +296,8 @@ export const translations = {
           id: "chef-special-burger",
           title: "Chef Special Burger",
           titleEn: "Chef Special Burger",
-          note: "A house favourite from the menu",
-          price: 320,
+          note: "A juicy house favourite from the burger menu",
+          price: 340,
           category: "burgers",
           seed: "burger"
         },
@@ -305,9 +305,9 @@ export const translations = {
           id: "foodlab-special-chowmein",
           title: "Food Lab Special Chow Mein",
           titleEn: "Food Lab Special Chow Mein",
-          note: "A satisfying noodle classic",
-          price: 350,
-          category: "chow-mein",
+          note: "A satisfying stir-fried noodle classic",
+          price: 380,
+          category: "pasta-chowmein",
           seed: "noodles"
         }
       ]

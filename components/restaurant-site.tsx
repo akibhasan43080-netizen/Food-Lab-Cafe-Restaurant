@@ -51,7 +51,33 @@ type CartLine = {
   sizeBn?: string;
 };
 
+/**
+ * =========================================================================
+ * REVERTIBLE CONFIGURATION FLAG: WHATSAPP ORDER HANDOVER
+ * =========================================================================
+ * - `false`: WhatsApp handover is turned OFF (in-app order confirmation).
+ *            The order button confirms the order directly and shows an
+ *            immediate confirmation card with order ID and direct call option.
+ *
+ * - `true`:  WhatsApp handover is turned ON (original behavior).
+ *            The order button opens WhatsApp with a pre-formatted order message.
+ *
+ * TO REVERT: Simply change `ENABLE_WHATSAPP_HANDOVER = false` to `true` below.
+ * =========================================================================
+ */
+export const ENABLE_WHATSAPP_HANDOVER = false;
 
+type ConfirmedOrderData = {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  orderType: string;
+  address: string;
+  note: string;
+  items: CartLine[];
+  subtotal: number;
+  time: string;
+};
 
 export default function RestaurantSite() {
   // Bangla by default as requested
@@ -59,8 +85,10 @@ export default function RestaurantSite() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [orderSuccessModal, setOrderSuccessOpen] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrderData | null>(null);
   const [activeCategory, setActiveCategory] = useState(
-    menuCategories[0]?.id || "sandwich-shawarma"
+    menuCategories[0]?.id || "appetizers"
   );
   const [search, setSearch] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -500,8 +528,39 @@ export default function RestaurantSite() {
       message
     )}`;
 
-    // Safe navigation that works reliably within iframes and mobile browsers
-    window.location.href = whatsappUrl;
+    // Revertible WhatsApp handover toggle check:
+    if (ENABLE_WHATSAPP_HANDOVER) {
+      // Safe navigation that works reliably within iframes and mobile browsers
+      window.location.href = whatsappUrl;
+      return;
+    }
+
+    // Direct in-app order submission when WhatsApp handover is turned off
+    const orderRef = `FL-${Math.floor(100000 + Math.random() * 900000)}`;
+    setConfirmedOrder({
+      id: orderRef,
+      customerName: customer.name.trim(),
+      customerPhone: customer.phone.trim(),
+      orderType: customer.orderType,
+      address: customer.address.trim(),
+      note: customer.note.trim(),
+      items: [...cart],
+      subtotal: subtotal,
+      time: new Date().toLocaleTimeString(lang === "bn" ? "bn-BD" : "en-US", {
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    });
+
+    // Clear cart and display order confirmation modal
+    setCart([]);
+    try {
+      localStorage.removeItem("foodlab-cart");
+    } catch {
+      /* Ignore storage write error */
+    }
+    setCheckoutOpen(false);
+    setOrderSuccessOpen(true);
   }
 
   const numDisplay = (val: number | string) =>
@@ -673,7 +732,7 @@ export default function RestaurantSite() {
           <button
             className="button button-dark header-order"
             onClick={() => {
-              setActiveCategory(menuCategories[0]?.id || "sandwich-shawarma");
+              setActiveCategory(menuCategories[0]?.id || "appetizers");
               document.getElementById("menu")?.scrollIntoView({ behavior: "smooth" });
             }}
           >
@@ -1539,7 +1598,7 @@ export default function RestaurantSite() {
           <button
             className="button button-orange"
             onClick={() => {
-              setActiveCategory(menuCategories[0]?.id || "sandwich-shawarma");
+              setActiveCategory(menuCategories[0]?.id || "appetizers");
               document
                 .getElementById("menu")
                 ?.scrollIntoView({ behavior: "smooth" });
@@ -1640,7 +1699,7 @@ export default function RestaurantSite() {
         </a>
         <button
           onClick={() => {
-            setActiveCategory(menuCategories[0]?.id || "sandwich-shawarma");
+            setActiveCategory(menuCategories[0]?.id || "appetizers");
             document
               .getElementById("menu")
               ?.scrollIntoView({ behavior: "smooth" });
@@ -1836,7 +1895,13 @@ export default function RestaurantSite() {
                 </button>
               </div>
 
-              <p className="checkout-intro">{t.checkout.intro}</p>
+              <p className="checkout-intro">
+                {ENABLE_WHATSAPP_HANDOVER
+                  ? t.checkout.intro
+                  : lang === "bn"
+                  ? "আপনার যোগাযোগের তথ্য ও অর্ডারের ধরন দিয়ে অর্ডারটি নিশ্চিত করুন। আমাদের রেস্তোরাঁ থেকে ফোন করে খাবারের প্রস্তুতি ও সময় চূড়ান্ত করা হবে।"
+                  : "Enter your contact details and order type below to confirm your order. Our team will call to confirm preparation and timing."}
+              </p>
 
               {formError && (
                 <div className="checkout-error-banner" role="alert">
@@ -1926,13 +1991,28 @@ export default function RestaurantSite() {
                   <strong>{formatPrice(subtotal, lang)}</strong>
                 </div>
 
-                <p className="checkout-disclaimer">{t.checkout.disclaimer}</p>
+                <p className="checkout-disclaimer">
+                  {ENABLE_WHATSAPP_HANDOVER
+                    ? t.checkout.disclaimer
+                    : lang === "bn"
+                    ? "কোনো অনলাইন অগ্রিম পেমেন্টের প্রয়োজন নেই। খাবার প্রাপ্যতা, ডেলিভারি চার্জ এবং সময় রেস্তোরাঁ কর্তৃপক্ষ ফোনে নিশ্চিত করবে।"
+                    : "No online payment is required. Food availability, delivery charges, and timing will be confirmed by phone."}
+                </p>
 
                 <button
                   type="submit"
-                  className="button button-orange full-width"
+                  className="button button-orange full-width flex items-center justify-center gap-2"
                 >
-                  {t.actions.continueWhatsApp} <ArrowRight size={16} />
+                  {ENABLE_WHATSAPP_HANDOVER ? (
+                    <>
+                      {t.actions.continueWhatsApp} <ArrowRight size={16} />
+                    </>
+                  ) : (
+                    <>
+                      <Check size={18} />
+                      {lang === "bn" ? "অর্ডার নিশ্চিত করুন" : "Confirm Order"}
+                    </>
+                  )}
                 </button>
 
                 <a
@@ -1946,6 +2026,165 @@ export default function RestaurantSite() {
                 </a>
               </form>
             </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Order Success / Confirmation Modal (Active when WhatsApp handover is off) */}
+      <AnimatePresence>
+        {orderSuccessModal && confirmedOrder && (
+          <motion.div
+            className="overlay order-success-overlay"
+            role="presentation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onMouseDown={event => {
+              if (event.target === event.currentTarget) setOrderSuccessOpen(false);
+            }}
+          >
+            <motion.div
+              className="order-success-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="order-success-title"
+              initial={{ scale: 0.92, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 16 }}
+              transition={{ type: "spring", damping: 26, stiffness: 300 }}
+            >
+              <div className="order-success-header">
+                <div className="order-success-icon-wrap">
+                  <div className="order-success-icon-pulse" />
+                  <div className="order-success-icon">
+                    <Check size={26} strokeWidth={3} />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="order-success-close"
+                  aria-label="Close"
+                  onClick={() => setOrderSuccessOpen(false)}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="order-success-body">
+                <span className="order-success-badge">
+                  {lang === "bn" ? "অর্ডার গ্রহণ করা হয়েছে" : "Order Received"}
+                </span>
+
+                <h2 id="order-success-title" className="order-success-title">
+                  {lang === "bn"
+                    ? "আপনার অর্ডার সফলভাবে সম্পন্ন হয়েছে!"
+                    : "Your Order is Confirmed!"}
+                </h2>
+
+                <p className="order-success-desc">
+                  {lang === "bn"
+                    ? `ধন্যবাদ ${confirmedOrder.customerName}! আপনার অর্ডারটি আমাদের সিস্টেমে সফলভাবে পৌঁছেছে। আমাদের প্রতিনিধি শীঘ্রই আপনাকে ফোন করে অর্ডার প্রস্তুত ও ডেলিভারি নিশ্চিত করবেন।`
+                    : `Thank you, ${confirmedOrder.customerName}! Your order has been placed with Food Lab. Our team will contact you shortly to confirm your order.`}
+                </p>
+
+                <div className="order-summary-box">
+                  <div className="order-summary-row order-summary-id-row">
+                    <span>{lang === "bn" ? "অর্ডার রেফারেন্স নং" : "Order Ref No."}</span>
+                    <strong>#{confirmedOrder.id}</strong>
+                  </div>
+
+                  <div className="order-summary-row">
+                    <span>{lang === "bn" ? "অর্ডারের ধরন" : "Order Type"}</span>
+                    <span className="order-summary-tag">
+                      {confirmedOrder.orderType === "Delivery"
+                        ? lang === "bn"
+                          ? "হোম ডেলিভারি"
+                          : "Home Delivery"
+                        : lang === "bn"
+                        ? "পিকআপ (রেস্তোরাঁ থেকে)"
+                        : "Pickup"}
+                    </span>
+                  </div>
+
+                  <div className="order-summary-row">
+                    <span>{lang === "bn" ? "গ্রাহকের নাম" : "Customer"}</span>
+                    <span className="order-summary-val">{confirmedOrder.customerName}</span>
+                  </div>
+
+                  <div className="order-summary-row">
+                    <span>{lang === "bn" ? "মোবাইল নম্বর" : "Phone"}</span>
+                    <span className="order-summary-val">{confirmedOrder.customerPhone}</span>
+                  </div>
+
+                  {confirmedOrder.orderType === "Delivery" && confirmedOrder.address && (
+                    <div className="order-summary-row">
+                      <span>{lang === "bn" ? "ডেলিভারি ঠিকানা" : "Address"}</span>
+                      <span className="order-summary-val text-right max-w-[200px] truncate" title={confirmedOrder.address}>
+                        {confirmedOrder.address}
+                      </span>
+                    </div>
+                  )}
+
+                  {confirmedOrder.note && (
+                    <div className="order-summary-row">
+                      <span>{lang === "bn" ? "বিশেষ অনুরোধ" : "Special Note"}</span>
+                      <span className="order-summary-val text-right max-w-[200px] truncate" title={confirmedOrder.note}>
+                        {confirmedOrder.note}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="order-summary-items-list">
+                    <span className="order-summary-items-label">
+                      {lang === "bn" ? "অর্ডারকৃত আইটেমসমূহ:" : "Ordered Items:"}
+                    </span>
+                    <ul className="order-items-ul">
+                      {confirmedOrder.items.map(item => {
+                        const name = lang === "bn" ? item.nameBn : item.name;
+                        const size = item.size
+                          ? ` (${lang === "bn" && item.sizeBn ? item.sizeBn : item.size})`
+                          : "";
+                        const qty = lang === "bn" ? toBengaliNumber(item.quantity) : item.quantity;
+                        return (
+                          <li key={item.key} className="order-item-row">
+                            <span>
+                              {qty} × {name}{size}
+                            </span>
+                            <strong>{formatPrice(item.price * item.quantity, lang)}</strong>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+
+                  <div className="order-summary-row order-summary-total-row">
+                    <span>{lang === "bn" ? "মোট বিল (সাবটোটাল)" : "Subtotal"}</span>
+                    <strong>{formatPrice(confirmedOrder.subtotal, lang)}</strong>
+                  </div>
+                </div>
+
+                <div className="order-success-actions">
+                  <a
+                    className="button button-orange full-width flex items-center justify-center gap-2"
+                    href={`tel:${restaurant.phoneLink}`}
+                  >
+                    <Phone size={16} />
+                    {lang === "bn"
+                      ? `প্রয়োজনে সরাসরি কল করুন: ${restaurant.phoneDisplayBn}`
+                      : `Call Restaurant: ${restaurant.phoneDisplay}`}
+                  </a>
+
+                  <button
+                    type="button"
+                    className="order-success-return-btn"
+                    onClick={() => setOrderSuccessOpen(false)}
+                  >
+                    {lang === "bn" ? "মেন্যুতে ফিরে যান" : "Back to Menu"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
